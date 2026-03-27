@@ -49,7 +49,11 @@ open (region,"$file1") or die "cannot open file, $!\n";
 #@Region=<region>;
 $outFile=shift or die "Usage: $1 needs OutputFile prefix \n";
 $b1 = $outFile."_INVSignatures.Allpop.txt";
-open (OUT, ">OUTPUT_INV/$b1");
+my $output_dir = $ENV{"DEVRO_OUTPUT_DIR"} // "OUTPUT_INV";
+if (!-d $output_dir) {
+	mkdir $output_dir or die "cannot create output directory $output_dir: $!\n";
+}
+open (OUT, ">$output_dir/$b1");
 #open (OUT2, ">SingletonR_bam.seq");
 $config=shift or die "Usage: $2 needs configFile, group and PATH to BAMfiles with name \n";
 open (conFile,"$config") or die "cannot open file, $!\n";
@@ -64,12 +68,13 @@ while($configLine=<conFile>)
 #@pop=("BAMS_input/1777_sample.dedup.bam","BAMS_input/AngoraMale1_sample.dedup.bam");
 }
 
-$ReadLength_default=100; ## change this or update this...
-$MappingQuality_default=10; ## change this or update this...
-$meanInsert=400; ## These parameters were adjusted according to the distribution of sample library prep. see below
-$sigma=130; ## These parameters were adjusted according to the lib. distribution 
+$ReadLength_default=$ENV{"DEVRO_READ_LENGTH"} // 100; ## change this or update this...
+$MappingQuality_default=$ENV{"DEVRO_MIN_MAPQ"} // 10; ## change this or update this...
+$meanInsert=$ENV{"DEVRO_MEAN_INSERT"} // 400; ## These parameters were adjusted according to the distribution of sample library prep. see below
+$sigma=$ENV{"DEVRO_INSERT_SIGMA"} // 130; ## These parameters were adjusted according to the lib. distribution 
 $InsertRange=$meanInsert+(3*$sigma);
 $InsertRangeMin=$meanInsert-(3*$sigma);
+$WindowSize=$ENV{"DEVRO_WINDOW_SIZE"} // 1000;
 ########## Global Initialization of variables  ###########
 my $pairedEndseq;
 my $pair_proper_mapped;
@@ -94,7 +99,7 @@ while($reg=<region>)
 		my ($chr,$sp_st,$chr_size)= @split_line[0,1,2]; ## full bam file scanned in 1kbp windows
 		#my ($chr,$chr_size)= @split_line[0,1];
 		#push(@Array_pop_total_DoC_score,$total_DoC_score);
-		$st_pos=$sp_st; $end_pos=$st_pos+1000;$new_reg_st=$chr."\:".$st_pos."\-".$end_pos;
+		$st_pos=$sp_st; $end_pos=$st_pos+$WindowSize;$new_reg_st=$chr."\:".$st_pos."\-".$end_pos;
 		$bin=0;
 	while($st_pos <= ($chr_size))
 	{
@@ -180,7 +185,7 @@ while($reg=<region>)
        			
        			### calc. library insert distribution for 1Million reads on chr1
        			if($bool >-1){
-       			my $metrics=`samtools view -q 10 -f2 $pop[$i] chr1|cut -f9|head -1000000|awk '{if (\$1<0){\$1=-\$1}else{\$1=\$1} sum+=\$1; sumsq+=\$1*\$1} END {print sum/NR, sqrt(sumsq/NR - (sum/NR)^2)}'`;
+       			my $metrics=`samtools view -q $MappingQuality_default -f2 $pop[$i] chr1|cut -f9|head -1000000|awk '{if (\$1<0){\$1=-\$1}else{\$1=\$1} sum+=\$1; sumsq+=\$1*\$1} END {print sum/NR, sqrt(sumsq/NR - (sum/NR)^2)}'`;
 				my ($mean,$stdev)=split(/ /,$metrics);
 				my ($mean,$stdev)=split(/\s/,$metrics);
 				$stdev=~s/\n//;
@@ -729,7 +734,7 @@ while($reg=<region>)
 		}## end of printing if
 		
 		$new_reg_mate=0;$median_dist_dup=0;$median_dist_invy=0;$median_F=0;$median_R=0;$median_dist_dup=0;
-		$st_pos=$end_pos; $end_pos=$end_pos+1000;$new_reg_st=$chr."\:".$st_pos."\-".$end_pos;
+		$st_pos=$end_pos; $end_pos=$end_pos+$WindowSize;$new_reg_st=$chr."\:".$st_pos."\-".$end_pos;
 	}## end of outer while
 	print $outFile." job is processed... NEXT";
 }
